@@ -5,7 +5,7 @@ import "sync"
 type Closer interface {
 	Closed() bool
 	Closing() <-chan struct{}
-	CloseAndRun(fn func() error) error
+	CloseAndRunOnce(onClose func() error) error
 	Reset()
 }
 type closer struct {
@@ -29,15 +29,20 @@ func (c *closer) Closed() bool {
 func (c *closer) Closing() <-chan struct{} {
 	return c.closing
 }
-func (c *closer) CloseAndRun(fn func() error) error {
+func (c *closer) CloseAndRunOnce(onClose func() error) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	err := fn()
-	if err != nil {
-		return err
+	if c.closed {
+		return nil
 	}
 	c.closed = true
 	close(c.closing)
+	if onClose != nil {
+		err := onClose()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
